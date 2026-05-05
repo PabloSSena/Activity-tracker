@@ -1,17 +1,19 @@
 package classifier_test
 
 import (
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/user/activitytracker/internal/monitor/classifier"
 )
 
 func TestClassify_VSCode(t *testing.T) {
 	tests := []struct {
-		process     string
-		title       string
-		wantType    string
-		wantLabel   string
+		process   string
+		title     string
+		wantType  string
+		wantLabel string
 	}{
 		{"Code.exe", "main.go — myproject — Visual Studio Code", "vscode", "myproject"},
 		{"code", "README.md — backend — Visual Studio Code", "vscode", "backend"},
@@ -79,12 +81,20 @@ func TestClassify_Other(t *testing.T) {
 }
 
 func TestClassify_Other_TruncatesLongTitle(t *testing.T) {
-	long := make([]byte, 200)
-	for i := range long {
-		long[i] = 'x'
+	// ASCII: 200 'x' bytes — should truncate to 100 runes
+	long := strings.Repeat("x", 200)
+	_, cl := classifier.Classify("notepad.exe", long)
+	if len([]rune(cl)) > 100 {
+		t.Errorf("ASCII label rune length = %d, want <= 100", len([]rune(cl)))
 	}
-	_, cl := classifier.Classify("notepad.exe", string(long))
-	if len(cl) > 100 {
-		t.Errorf("label length = %d, want <= 100", len(cl))
+
+	// Multi-byte: 200 em-dashes (each 3 bytes) — must produce valid UTF-8
+	multibyte := strings.Repeat("—", 200)
+	_, cl2 := classifier.Classify("notepad.exe", multibyte)
+	if len([]rune(cl2)) > 100 {
+		t.Errorf("multibyte label rune length = %d, want <= 100", len([]rune(cl2)))
+	}
+	if !utf8.ValidString(cl2) {
+		t.Error("truncated multibyte label is not valid UTF-8")
 	}
 }

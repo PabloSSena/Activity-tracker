@@ -51,8 +51,8 @@ func Classify(processName, windowTitle string) (contextType, contextLabel string
 		return "browser", "browser/research"
 	}
 	label := windowTitle
-	if len(label) > 100 {
-		label = label[:100]
+	if len([]rune(label)) > 100 {
+		label = string([]rune(label)[:100])
 	}
 	return "other", label
 }
