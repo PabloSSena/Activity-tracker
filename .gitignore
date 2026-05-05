@@ -1,0 +1,54 @@
+# --- Binaries / build output ---
+/bin/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# --- Go ---
+/vendor/
+*.cover
+coverage.out
+coverage.html
+*.prof
+go.work
+go.work.sum
+
+# --- IDE / editor ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Logs / temp ---
+*.log
+*.tmp
+*.bak
+
+# --- Secrets / local config ---
+.env
+.env.*
+!.env.example
+
+# --- Claude Code: keep skills/agents, ignore local-only settings ---
+.claude/settings.local.json
+.claude/projects/
+.claude/memory/
+
+# --- Activity tracker artifacts (local DBs / exports) ---
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+/data.db
+/exports/

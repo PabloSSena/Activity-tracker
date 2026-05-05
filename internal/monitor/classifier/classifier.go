@@ -48,7 +48,7 @@ func Classify(processName, windowTitle string) (contextType, contextLabel string
 		return "meeting", "Zoom Meeting"
 	}
 	if browserProcesses[proc] {
-		return "browser", "browser/research"
+		return "browser", extractBrowserTitle(windowTitle)
 	}
 	label := windowTitle
 	if len([]rune(label)) > 100 {
@@ -78,6 +78,33 @@ func extractVSCodeWorkspace(title string) string {
 		return title
 	}
 	return t
+}
+
+var browserSuffixes = []string{
+	" - Google Chrome",
+	" — Google Chrome",
+	" - Microsoft Edge",
+	" — Microsoft Edge",
+	" - Mozilla Firefox",
+	" — Mozilla Firefox",
+	" - Firefox",
+	" — Firefox",
+	" - Brave",
+	" — Brave",
+}
+
+func extractBrowserTitle(title string) string {
+	for _, suffix := range browserSuffixes {
+		if idx := strings.LastIndex(title, suffix); idx >= 0 {
+			if page := strings.TrimSpace(title[:idx]); page != "" {
+				return page
+			}
+		}
+	}
+	if title == "" {
+		return "browser/research"
+	}
+	return title
 }
 
 func extractTeamsMeeting(title string) string {

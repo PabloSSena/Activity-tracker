@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS schema_migrations;
+DROP TABLE IF EXISTS meta;
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS raw_events;

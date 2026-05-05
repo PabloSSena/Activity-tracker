@@ -1,0 +1,26 @@
+version: 2
+
+project_name: activitytracker
+
+builds:
+  - id: activitytracker
+    main: ./cmd/activitytracker
+    binary: activitytracker
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - windows
+      - linux
+    goarch:
+      - amd64
+
+archives:
+  - id: default
+    format: zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  draft: true

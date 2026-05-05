@@ -222,6 +222,12 @@ var tmplFuncs = template.FuncMap{
 	"fmtTimeRange":   FmtTimeRange,
 	"fmtSidebarDate": FmtSidebarDate,
 	"fmtHeaderDate":  FmtHeaderDate,
+	"changedFiles": func(dr *report.DailyReport, id int64) []string {
+		if dr == nil {
+			return nil
+		}
+		return dr.ChangedFiles[id]
+	},
 }
 
 var pageTmpl = template.Must(template.New("page").Funcs(tmplFuncs).Parse(`<!DOCTYPE html>
@@ -245,6 +251,8 @@ button{padding:5px 12px;border:1px solid #2a2d3a;border-radius:5px;background:tr
 button:hover{border-color:#3b82f6;color:#e2e8f0}
 button.danger{color:#f87171}
 button.danger:hover{border-color:#f87171;background:rgba(248,113,113,.08)}
+button.primary{background:#3b82f6;border-color:#3b82f6;color:#fff}
+button.primary:hover{background:#2563eb;border-color:#2563eb;color:#fff}
 #content{flex:1;overflow-y:auto;padding:24px 32px}
 .inner{max-width:760px;margin:0 auto}
 .section-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8b949e;margin:28px 0 10px}
@@ -255,6 +263,11 @@ button.danger:hover{border-color:#f87171;background:rgba(248,113,113,.08)}
 .tl-time{color:#8b949e;font-size:12px;font-family:monospace}
 .tl-dur{background:#2a2d3a;color:#8b949e;font-size:11px;padding:2px 7px;border-radius:10px;font-family:monospace}
 .tl-type{font-size:11px;font-weight:600}
+.tl-files{margin-top:10px;padding-top:10px;border-top:1px solid #2a2d3a}
+.tl-files-toggle{background:none;border:none;color:#8b949e;font-size:11px;cursor:pointer;padding:0;text-transform:uppercase;letter-spacing:.06em}
+.tl-files-toggle:hover{color:#3b82f6}
+.tl-files-list{margin-top:8px;font-family:monospace;font-size:11px;color:#94a3b8;line-height:1.7;word-break:break-all}
+.tl-files-list div{padding:1px 0}
 .grp-card{background:#1c2030;border:1px solid #2a2d3a;border-radius:6px;padding:14px 16px;margin-bottom:8px}
 .grp-name{font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:10px}
 .grp-row{display:flex;justify-content:space-between;font-size:13px;color:#8b949e;padding:3px 0}
@@ -283,7 +296,8 @@ button.danger:hover{border-color:#f87171;background:rgba(248,113,113,.08)}
     {{if .Selected}}
     <span class="toolbar-date">{{.Selected | fmtHeaderDate}}</span>
     <div class="toolbar-actions">
-      <button onclick="copyReport(this)">Copy</button>
+      <button onclick="copyReport(this)">Copy md</button>
+      <button onclick="copyForAI(this)" class="primary">Copy for AI</button>
       <a href="/export?date={{.Selected}}" style="text-decoration:none"><button>Export md</button></a>
       <button class="danger" onclick="deleteDay('{{.Selected}}')">Delete day</button>
     </div>
@@ -298,6 +312,7 @@ button.danger:hover{border-color:#f87171;background:rgba(248,113,113,.08)}
         {{if .Report.Sessions}}
         <div class="section-label">Timeline</div>
         {{range .Report.Sessions}}{{if and .EndUTC .DurationSecs}}
+        {{$files := changedFiles $.Report .ID}}
         <div class="tl-card" style="border-left-color:{{contextColor .ContextType}}">
           <div class="tl-label">{{.ContextLabel}}</div>
           <div class="tl-meta">
@@ -305,6 +320,14 @@ button.danger:hover{border-color:#f87171;background:rgba(248,113,113,.08)}
             <span class="tl-dur">{{fmtDurP .DurationSecs}}</span>
             <span class="tl-type" style="color:{{contextColor .ContextType}}">{{.ContextType}}</span>
           </div>
+          {{if $files}}
+          <div class="tl-files">
+            <button class="tl-files-toggle" onclick="toggleFiles(this)">{{len $files}} file{{if ne (len $files) 1}}s{{end}} changed ▾</button>
+            <div class="tl-files-list" style="display:none">
+              {{range $files}}<div>{{.}}</div>{{end}}
+            </div>
+          </div>
+          {{end}}
         </div>
         {{end}}{{end}}
         {{if .Report.Groups}}
@@ -342,8 +365,23 @@ button.danger:hover{border-color:#f87171;background:rgba(248,113,113,.08)}
 const mdText = {{if .ReportMDJS}}{{.ReportMDJS}}{{else}}null{{end}};
 function copyReport(btn) {
   navigator.clipboard.writeText(mdText)
-    .then(function(){ btn.textContent='Copied!'; setTimeout(function(){ btn.textContent='Copy'; }, 1500); })
+    .then(function(){ btn.textContent='Copied!'; setTimeout(function(){ btn.textContent='Copy md'; }, 1500); })
     .catch(function(e){ alert('Copy failed: ' + e); });
+}
+function copyForAI(btn) {
+  var prompt = "Below is a log of my activity for one day, captured by an automated tracker. " +
+    "Please summarize what I worked on, grouped by topic/project. " +
+    "Highlight the main areas I spent time on, any meetings, and approximate time spent. " +
+    "Keep the summary concise and use bullet points.\n\n---\n\n";
+  navigator.clipboard.writeText(prompt + mdText)
+    .then(function(){ btn.textContent='Copied!'; setTimeout(function(){ btn.textContent='Copy for AI'; }, 1500); })
+    .catch(function(e){ alert('Copy failed: ' + e); });
+}
+function toggleFiles(btn) {
+  var list = btn.nextElementSibling;
+  var open = list.style.display === 'block';
+  list.style.display = open ? 'none' : 'block';
+  btn.textContent = btn.textContent.replace(open ? '▴' : '▾', open ? '▾' : '▴');
 }
 function deleteDay(date) {
   if (!confirm('Permanently delete all data for ' + date + '?')) return;

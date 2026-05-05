@@ -58,14 +58,27 @@ func TestClassify_Meeting(t *testing.T) {
 }
 
 func TestClassify_Browser(t *testing.T) {
-	browsers := []string{"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "google-chrome", "firefox"}
-	for _, proc := range browsers {
-		ct, cl := classifier.Classify(proc, "Some Page Title")
+	tests := []struct {
+		process   string
+		title     string
+		wantLabel string
+	}{
+		{"chrome.exe", "GitHub - pablosena/repo - Google Chrome", "GitHub - pablosena/repo"},
+		{"chrome.exe", "Stack Overflow — Google Chrome", "Stack Overflow"},
+		{"msedge.exe", "Bing - Microsoft Edge", "Bing"},
+		{"firefox.exe", "DuckDuckGo — Mozilla Firefox", "DuckDuckGo"},
+		{"brave.exe", "Privacy Search - Brave", "Privacy Search"},
+		{"google-chrome", "Hacker News - Google Chrome", "Hacker News"},
+		{"firefox", "MDN — Firefox", "MDN"},
+		{"chrome.exe", "", "browser/research"},
+	}
+	for _, tt := range tests {
+		ct, cl := classifier.Classify(tt.process, tt.title)
 		if ct != "browser" {
-			t.Errorf("Classify(%q) type = %q, want browser", proc, ct)
+			t.Errorf("Classify(%q, %q) type = %q, want browser", tt.process, tt.title, ct)
 		}
-		if cl != "browser/research" {
-			t.Errorf("Classify(%q) label = %q, want browser/research", proc, cl)
+		if cl != tt.wantLabel {
+			t.Errorf("Classify(%q, %q) label = %q, want %q", tt.process, tt.title, cl, tt.wantLabel)
 		}
 	}
 }
