@@ -58,7 +58,8 @@ func FmtSidebarDate(dateStr string) string {
 	return t.Format("Mon, Jan 2")
 }
 
-// FmtHeaderDate parses a "YYYY-MM-DD" string and returns "Monday, January 2".
+// FmtHeaderDate parses a "YYYY-MM-DD" string and returns the date formatted as
+// "<Weekday>, <Month> <Day>" (e.g. "Sunday, May 3").
 // Returns the input unchanged if parsing fails.
 func FmtHeaderDate(dateStr string) string {
 	t, err := time.ParseInLocation("2006-01-02", dateStr, time.Local)

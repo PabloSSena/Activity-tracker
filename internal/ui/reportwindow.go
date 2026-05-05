@@ -38,15 +38,20 @@ func NewReportServer(store storage.Storage, gen *report.Generator, fmtr *report.
 	return &ReportServer{store: store, generator: gen, formatter: fmtr, liveFn: liveFn}
 }
 
-// ServeHTTP exposes the report server's mux for testing.
-func (s *ReportServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+// buildMux constructs and returns the HTTP mux with all registered routes.
+func (s *ReportServer) buildMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/report", s.handleReport)
 	mux.HandleFunc("/export", s.handleExport)
 	mux.HandleFunc("/delete", s.handleDelete)
 	mux.HandleFunc("/api/session/current", s.handleCurrentSession)
-	mux.ServeHTTP(w, r)
+	return mux
+}
+
+// ServeHTTP exposes the report server's mux for testing.
+func (s *ReportServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.buildMux().ServeHTTP(w, r)
 }
 
 // Start begins listening on a random localhost port (non-blocking).
@@ -58,14 +63,7 @@ func (s *ReportServer) Start(ctx context.Context) error {
 	s.port = ln.Addr().(*net.TCPAddr).Port
 	log.Printf("ui: report server → http://127.0.0.1:%d", s.port)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", s.handleIndex)
-	mux.HandleFunc("/report", s.handleReport)
-	mux.HandleFunc("/export", s.handleExport)
-	mux.HandleFunc("/delete", s.handleDelete)
-	mux.HandleFunc("/api/session/current", s.handleCurrentSession)
-
-	srv := &http.Server{Handler: mux}
+	srv := &http.Server{Handler: s.buildMux()}
 	go func() {
 		<-ctx.Done()
 		shutCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -341,7 +339,7 @@ button.danger:hover{border-color:#f87171;background:rgba(248,113,113,.08)}
   </div>
 </div>
 <script>
-const mdText = {{.ReportMDJS}};
+const mdText = {{if .ReportMDJS}}{{.ReportMDJS}}{{else}}null{{end}};
 function copyReport(btn) {
   navigator.clipboard.writeText(mdText)
     .then(function(){ btn.textContent='Copied!'; setTimeout(function(){ btn.textContent='Copy'; }, 1500); })
