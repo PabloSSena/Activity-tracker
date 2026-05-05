@@ -30,8 +30,8 @@ var browserProcesses = map[string]bool{
 	"msedge":        true,
 }
 
-const vscSuffixEm  = " — Visual Studio Code" // em dash —
-const vscSuffixHyp = " - Visual Studio Code"       // regular hyphen
+const vscSuffixEm = " — Visual Studio Code"  // em dash —
+const vscSuffixHyp = " - Visual Studio Code" // regular hyphen
 
 // Classify maps a process name and window title to a context type and label.
 // Priority: vscode > meeting (Teams) > meeting (Zoom) > browser > other.
@@ -82,8 +82,8 @@ func extractVSCodeWorkspace(title string) string {
 
 func extractTeamsMeeting(title string) string {
 	// "Meeting Name | Microsoft Teams" → "Meeting Name"
-	if idx := strings.Index(title, " | Microsoft Teams"); idx >= 0 {
-		return title[:idx]
+	if before, _, ok := strings.Cut(title, " | Microsoft Teams"); ok {
+		return before
 	}
 	return "Microsoft Teams"
 }
