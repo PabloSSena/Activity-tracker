@@ -33,9 +33,26 @@ func workspaceStorageDirs() []string {
 		roots = []string{filepath.Join(home, "Library", "Application Support")}
 	default: // linux, *bsd
 		if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-			roots = []string{xdg}
+			roots = append(roots, xdg)
 		} else {
-			roots = []string{filepath.Join(home, ".config")}
+			roots = append(roots, filepath.Join(home, ".config"))
+		}
+		// Snap installs sandbox config under ~/snap/<app>/current/.config.
+		// Enumerate all snaps so we don't need to maintain a list of bundle IDs.
+		if entries, err := os.ReadDir(filepath.Join(home, "snap")); err == nil {
+			for _, e := range entries {
+				if e.IsDir() {
+					roots = append(roots, filepath.Join(home, "snap", e.Name(), "current", ".config"))
+				}
+			}
+		}
+		// Flatpak installs sandbox config under ~/.var/app/<app>/config.
+		if entries, err := os.ReadDir(filepath.Join(home, ".var", "app")); err == nil {
+			for _, e := range entries {
+				if e.IsDir() {
+					roots = append(roots, filepath.Join(home, ".var", "app", e.Name(), "config"))
+				}
+			}
 		}
 	}
 	flavors := []string{"Code", "Code - Insiders", "VSCodium", "Cursor"}

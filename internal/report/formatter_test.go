@@ -70,6 +70,53 @@ func TestFormatter_EmptyDay_EmptyStateMessage(t *testing.T) {
 	}
 }
 
+func TestFormatter_NotesSection(t *testing.T) {
+	end := time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC)
+	dur := 3600
+	sessions := []storage.Session{
+		{
+			ContextType:  "vscode",
+			ContextLabel: "myproject",
+			StartUTC:     time.Date(2026, 5, 1, 9, 0, 0, 0, time.UTC),
+			EndUTC:       &end,
+			DurationSecs: &dur,
+			Note:         "Built the new timeline UI",
+		},
+		{
+			ContextType:  "browser",
+			ContextLabel: "research",
+			StartUTC:     time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC),
+			EndUTC:       &end,
+			DurationSecs: &dur,
+		},
+	}
+	dr := report.DailyReport{Date: "2026-05-01", Sessions: sessions}
+	out := report.NewFormatter().Format(dr)
+
+	if !strings.Contains(out, "📝") {
+		t.Error("expected 📝 marker on note-bearing row")
+	}
+	if !strings.Contains(out, "## My notes") {
+		t.Error("expected '## My notes' section")
+	}
+	if !strings.Contains(out, "Built the new timeline UI") {
+		t.Error("expected note text rendered")
+	}
+}
+
+func TestFormatter_NoNotesSectionWhenAllEmpty(t *testing.T) {
+	end := time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC)
+	dur := 3600
+	sessions := []storage.Session{{
+		ContextType: "vscode", ContextLabel: "p", StartUTC: time.Date(2026, 5, 1, 9, 0, 0, 0, time.UTC),
+		EndUTC: &end, DurationSecs: &dur,
+	}}
+	out := report.NewFormatter().Format(report.DailyReport{Date: "2026-05-01", Sessions: sessions})
+	if strings.Contains(out, "## My notes") {
+		t.Error("notes section should be omitted when no notes exist")
+	}
+}
+
 func TestFormatter_EndsWithNewline(t *testing.T) {
 	dr := report.DailyReport{Date: "2026-05-01"}
 	f := report.NewFormatter()

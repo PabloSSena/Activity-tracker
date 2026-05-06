@@ -34,6 +34,15 @@ func (s *stubStore) SessionsForDay(_ context.Context, _ string) ([]storage.Sessi
 }
 func (s *stubStore) DaysWithData(_ context.Context) ([]string, error) { return s.days, nil }
 func (s *stubStore) DeleteDay(_ context.Context, _ string) error       { return nil }
+func (s *stubStore) SetSessionNote(_ context.Context, id int64, note string) error {
+	for i := range s.sessions {
+		if s.sessions[i].ID == id {
+			s.sessions[i].Note = note
+			return nil
+		}
+	}
+	return nil
+}
 func (s *stubStore) GetMeta(_ context.Context, _ string) (string, error) {
 	return "", nil
 }
@@ -90,6 +99,64 @@ func TestReportPage_TimelineCards(t *testing.T) {
 	}
 	if !strings.Contains(body, "Sunday, May 3") {
 		t.Error("expected formatted header date")
+	}
+}
+
+func TestSessionNote_PostPersistsAndRendersInMarkdown(t *testing.T) {
+	end := time.Date(2026, 5, 3, 10, 0, 0, 0, time.Local)
+	dur := 3600
+	sessions := []storage.Session{{
+		ID:           42,
+		ContextType:  "vscode",
+		ContextLabel: "trackingSystem",
+		StartUTC:     time.Date(2026, 5, 3, 9, 0, 0, 0, time.Local),
+		EndUTC:       &end,
+		DurationSecs: &dur,
+	}}
+	srv := newTestServer(sessions)
+
+	// POST a note for session 42.
+	req := httptest.NewRequest(http.MethodPost, "/api/session/note?id=42",
+		strings.NewReader("Refactored the timeline grouping; ran into a template scope bug."))
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("POST /api/session/note: status=%d body=%s", w.Code, w.Body.String())
+	}
+
+	// Render the report page; the note should now appear in the card and in the markdown payload.
+	pageReq := httptest.NewRequest(http.MethodGet, "/report?date=2026-05-03", nil)
+	pageW := httptest.NewRecorder()
+	srv.ServeHTTP(pageW, pageReq)
+	body := pageW.Body.String()
+	if !strings.Contains(body, "Refactored the timeline grouping") {
+		t.Error("expected note text rendered in card HTML")
+	}
+	if !strings.Contains(body, "## My notes") {
+		t.Error("expected '## My notes' section in markdown payload (mdText) for AI copy")
+	}
+	if !strings.Contains(body, "📝") {
+		t.Error("expected note marker emoji in timeline table")
+	}
+}
+
+func TestSessionNote_RejectsNonPost(t *testing.T) {
+	srv := newTestServer(nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/session/note?id=1", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", w.Code)
+	}
+}
+
+func TestSessionNote_RejectsInvalidID(t *testing.T) {
+	srv := newTestServer(nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/session/note?id=abc", strings.NewReader("x"))
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
 	}
 }
 

@@ -3,8 +3,14 @@ package classifier
 import "strings"
 
 var vsCodeProcesses = map[string]bool{
-	"code.exe": true,
-	"code":     true,
+	"code.exe":          true,
+	"code":              true,
+	"code-insiders":     true,
+	"code - insiders":   true,
+	"codium":            true,
+	"vscodium":          true,
+	"cursor":            true,
+	"cursor.exe":        true,
 }
 
 var teamsProcesses = map[string]bool{

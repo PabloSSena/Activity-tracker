@@ -19,6 +19,7 @@ type Storage interface {
 	SessionsForDay(ctx context.Context, dateLocal string) ([]Session, error)
 	DaysWithData(ctx context.Context) ([]string, error)
 	DeleteDay(ctx context.Context, dateLocal string) error
+	SetSessionNote(ctx context.Context, id int64, note string) error
 
 	GetMeta(ctx context.Context, key string) (string, error)
 	SetMeta(ctx context.Context, key, value string) error
@@ -46,4 +47,5 @@ type Session struct {
 	EndUTC       *time.Time
 	DurationSecs *int
 	IsCheckpoint bool
+	Note         string
 }

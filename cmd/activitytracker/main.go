@@ -85,6 +85,8 @@ func main() {
 	workspaces := vscode.Discover()
 	if len(workspaces) > 0 {
 		log.Printf("vscode: discovered %d workspaces", len(workspaces))
+	} else {
+		log.Printf("vscode: no workspaces discovered — file change list will be empty")
 	}
 	resolver := func(name string) string { return workspaces[name] }
 

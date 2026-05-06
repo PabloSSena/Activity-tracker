@@ -24,8 +24,8 @@ func (f *Formatter) Format(dr DailyReport) string {
 
 	// Timeline table
 	b.WriteString("\n## Timeline\n\n")
-	b.WriteString("| Time | Duration | Context | Detail |\n")
-	b.WriteString("|------|----------|---------|--------|\n")
+	b.WriteString("| Time | Duration | Context | Detail | |\n")
+	b.WriteString("|------|----------|---------|--------|---|\n")
 	for _, s := range dr.Sessions {
 		if s.EndUTC == nil || s.DurationSecs == nil {
 			continue
@@ -35,11 +35,42 @@ func (f *Formatter) Format(dr DailyReport) string {
 		timeRange := fmt.Sprintf("%s–%s",
 			startLocal.Format("15:04"),
 			endLocal.Format("15:04"))
-		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n",
+		noteMark := ""
+		if strings.TrimSpace(s.Note) != "" {
+			noteMark = "📝"
+		}
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n",
 			timeRange,
 			f.FormatDuration(*s.DurationSecs),
 			s.ContextType,
-			s.ContextLabel)
+			s.ContextLabel,
+			noteMark)
+	}
+
+	// User notes — full-text annotations the user attached to specific sessions.
+	hasNotes := false
+	for _, s := range dr.Sessions {
+		if strings.TrimSpace(s.Note) != "" {
+			hasNotes = true
+			break
+		}
+	}
+	if hasNotes {
+		b.WriteString("\n## My notes\n")
+		for _, s := range dr.Sessions {
+			note := strings.TrimSpace(s.Note)
+			if note == "" || s.EndUTC == nil {
+				continue
+			}
+			startLocal := s.StartUTC.In(time.Local)
+			endLocal := s.EndUTC.In(time.Local)
+			fmt.Fprintf(&b, "\n### %s–%s · %s — %s\n%s\n",
+				startLocal.Format("15:04"),
+				endLocal.Format("15:04"),
+				s.ContextType,
+				s.ContextLabel,
+				note)
+		}
 	}
 
 	// Code changes per VS Code session

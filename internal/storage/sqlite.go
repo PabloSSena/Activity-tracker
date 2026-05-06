@@ -172,7 +172,7 @@ func (d *DB) RecoverCheckpoints(ctx context.Context, minDurationSecs int) error 
 // SessionsForDay returns completed sessions for a local date, ordered by start_utc.
 func (d *DB) SessionsForDay(ctx context.Context, dateLocal string) ([]Session, error) {
 	rows, err := d.db.QueryContext(ctx,
-		`SELECT id, date_local, context_type, context_label, start_utc, end_utc, duration_secs
+		`SELECT id, date_local, context_type, context_label, start_utc, end_utc, duration_secs, note
 		 FROM sessions
 		 WHERE date_local = ?
 		 ORDER BY start_utc ASC`,
@@ -246,7 +246,7 @@ func scanSessions(rows *sql.Rows) ([]Session, error) {
 		var endUTC sql.NullString
 		var durationSecs sql.NullInt64
 		if err := rows.Scan(&s.ID, &s.DateLocal, &s.ContextType, &s.ContextLabel,
-			&startUTC, &endUTC, &durationSecs); err != nil {
+			&startUTC, &endUTC, &durationSecs, &s.Note); err != nil {
 			return nil, err
 		}
 		s.StartUTC, _ = time.Parse(time.RFC3339, startUTC)
@@ -261,4 +261,19 @@ func scanSessions(rows *sql.Rows) ([]Session, error) {
 		sessions = append(sessions, s)
 	}
 	return sessions, rows.Err()
+}
+
+// SetSessionNote upserts the user-authored annotation for a session.
+// Empty string clears the note.
+func (d *DB) SetSessionNote(ctx context.Context, id int64, note string) error {
+	res, err := d.db.ExecContext(ctx,
+		`UPDATE sessions SET note = ? WHERE id = ?`, note, id)
+	if err != nil {
+		return fmt.Errorf("storage: set session note %d: %w", id, err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("storage: session %d not found", id)
+	}
+	return nil
 }
