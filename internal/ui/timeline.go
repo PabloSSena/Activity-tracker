@@ -54,6 +54,28 @@ func (t TimelineItem) Count() int {
 	return 1
 }
 
+// NoteCount returns how many of the item's sessions have a non-empty note.
+// For single-session items, this is 0 or 1. For groups, it's the count of
+// annotated children, used to badge collapsed groups in the timeline.
+func (t TimelineItem) NoteCount() int {
+	if t.Group {
+		var n int
+		for _, c := range t.Children {
+			if strings.TrimSpace(c.Note) != "" {
+				n++
+			}
+		}
+		return n
+	}
+	if t.Session == nil {
+		return 0
+	}
+	if strings.TrimSpace(t.Session.Note) != "" {
+		return 1
+	}
+	return 0
+}
+
 // TotalSecs returns the summed duration of the item.
 func (t TimelineItem) TotalSecs() int {
 	if t.Group {
@@ -158,6 +180,7 @@ type StripSegment struct {
 	ContextType  string
 	ContextLabel string
 	TimeRange    string
+	HasNote      bool
 }
 
 // StripTick is an hour marker on the strip's time axis.
@@ -170,48 +193,92 @@ type StripTick struct {
 type DayStrip struct {
 	Segments []StripSegment
 	Ticks    []StripTick
+	HasNoon  bool
+	NoonPct  float64
+}
+
+// PeriodGroup is a named slice of TimelineItems for one part of the day.
+type PeriodGroup struct {
+	Label     string
+	CSSClass  string
+	Color     string
+	Icon      string
+	Count     int
+	TotalSecs int
+	Items     []TimelineItem
+}
+
+// TimelineByPeriod groups reversed-within-period timeline items in chronological
+// period order: Morning (<12h), Afternoon (12h–17h), Evening (≥17h). Empty periods omitted.
+func TimelineByPeriod(sessions []storage.Session) []PeriodGroup {
+	items := ReverseTimelineItems(BuildTimelineItems(sessions))
+	type meta struct{ label, cssClass, color, icon string }
+	order := []meta{
+		{"Morning", "period-morning", "#f59e0b", "☀️"},
+		{"Afternoon", "period-afternoon", "#f97316", "🌅"},
+		{"Evening", "period-evening", "#8b5cf6", "🌙"},
+	}
+	buckets := make(map[string][]TimelineItem, 3)
+	for _, it := range items {
+		h := it.StartUTC().Local().Hour()
+		var label string
+		switch {
+		case h < 12:
+			label = "Morning"
+		case h < 17:
+			label = "Afternoon"
+		default:
+			label = "Evening"
+		}
+		buckets[label] = append(buckets[label], it)
+	}
+	var groups []PeriodGroup
+	for _, m := range order {
+		its, ok := buckets[m.label]
+		if !ok {
+			continue
+		}
+		var count, total int
+		for _, it := range its {
+			count += it.Count()
+			total += it.TotalSecs()
+		}
+		groups = append(groups, PeriodGroup{
+			Label:     m.label,
+			CSSClass:  m.cssClass,
+			Color:     m.color,
+			Icon:      m.icon,
+			Count:     count,
+			TotalSecs: total,
+			Items:     its,
+		})
+	}
+	return groups
 }
 
 // HasContent reports whether the strip has any segments to render.
 func (d DayStrip) HasContent() bool { return len(d.Segments) > 0 }
 
-// BuildDayStrip computes proportional positions for every session over the
-// day's active span (earliest start → latest end, padded out to whole hours).
-// Hour ticks step by 1h or 2h depending on the span.
+// BuildDayStrip positions every session on a fixed 24-hour axis (midnight→midnight),
+// giving a consistent scale across days and placing noon always at 50%.
 func BuildDayStrip(sessions []storage.Session) DayStrip {
 	if len(sessions) == 0 {
 		return DayStrip{}
 	}
 	loc := time.Local
-	var earliest, latest time.Time
+	var ref time.Time
 	for _, s := range sessions {
-		if s.EndUTC == nil {
-			continue
-		}
-		st := s.StartUTC.In(loc)
-		en := s.EndUTC.In(loc)
-		if earliest.IsZero() || st.Before(earliest) {
-			earliest = st
-		}
-		if en.After(latest) {
-			latest = en
+		if s.EndUTC != nil {
+			ref = s.StartUTC.In(loc)
+			break
 		}
 	}
-	if earliest.IsZero() || latest.IsZero() || !latest.After(earliest) {
+	if ref.IsZero() {
 		return DayStrip{}
 	}
 
-	start := time.Date(earliest.Year(), earliest.Month(), earliest.Day(),
-		earliest.Hour(), 0, 0, 0, loc)
-	end := latest
-	if latest.Minute() != 0 || latest.Second() != 0 || latest.Nanosecond() != 0 {
-		end = time.Date(latest.Year(), latest.Month(), latest.Day(),
-			latest.Hour()+1, 0, 0, 0, loc)
-	}
-	span := end.Sub(start).Seconds()
-	if span <= 0 {
-		return DayStrip{}
-	}
+	start := time.Date(ref.Year(), ref.Month(), ref.Day(), 0, 0, 0, 0, loc)
+	const span = 86400.0 // seconds in a day
 
 	segs := make([]StripSegment, 0, len(sessions))
 	for _, s := range sessions {
@@ -233,23 +300,17 @@ func BuildDayStrip(sessions []storage.Session) DayStrip {
 			ContextType:  s.ContextType,
 			ContextLabel: s.ContextLabel,
 			TimeRange:    FmtTimeRange(s.StartUTC, s.EndUTC),
+			HasNote:      strings.TrimSpace(s.Note) != "",
 		})
 	}
 
-	totalHours := int(end.Sub(start).Hours())
-	step := 1
-	if totalHours > 12 {
-		step = 2
-	}
-	ticks := make([]StripTick, 0, totalHours/step+1)
-	for h := 0; h <= totalHours; h += step {
-		t := start.Add(time.Duration(h) * time.Hour)
-		left := t.Sub(start).Seconds() / span * 100.0
-		ticks = append(ticks, StripTick{
-			LeftPct: left,
-			Label:   t.Format("15h"),
-		})
+	ticks := []StripTick{
+		{LeftPct: 0, Label: "0h"},
+		{LeftPct: 25, Label: "6h"},
+		{LeftPct: 50, Label: "12h"},
+		{LeftPct: 75, Label: "18h"},
+		{LeftPct: 100, Label: "24h"},
 	}
 
-	return DayStrip{Segments: segs, Ticks: ticks}
+	return DayStrip{Segments: segs, Ticks: ticks, HasNoon: true, NoonPct: 50.0}
 }

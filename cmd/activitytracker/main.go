@@ -82,13 +82,29 @@ func main() {
 	ctx, cancel := context.WithCancel(bgCtx)
 	go coll.Run(ctx)
 
+	if os.Getenv("ACTIVITYTRACKER_DEBUG_VSCODE") != "" {
+		vscode.DebugDiscover = true
+	}
 	workspaces := vscode.Discover()
 	if len(workspaces) > 0 {
 		log.Printf("vscode: discovered %d workspaces", len(workspaces))
+		if vscode.DebugDiscover {
+			for name, path := range workspaces {
+				log.Printf("vscode:   %q → %s", name, path)
+			}
+		}
 	} else {
 		log.Printf("vscode: no workspaces discovered — file change list will be empty")
 	}
-	resolver := func(name string) string { return workspaces[name] }
+	missLogged := map[string]bool{}
+	resolver := func(name string) string {
+		path := workspaces[name]
+		if path == "" && !missLogged[name] {
+			missLogged[name] = true
+			log.Printf("vscode: no workspace match for label %q (have: %d known)", name, len(workspaces))
+		}
+		return path
+	}
 
 	gen := report.NewGenerator(report.NewGrouper(cfg.Grouping.BrowserAdjacencyMins)).
 		WithWorkspaceResolver(resolver)
@@ -137,9 +153,8 @@ func (a *storeAdapter) OpenSession(contextType, label string) int64 {
 	return id
 }
 
-func (a *storeAdapter) CloseSession(id int64, durationSecs int) {
-	now := time.Now().UTC()
-	if err := a.db.CloseSession(bgCtx(), id, now, durationSecs, a.min); err != nil {
+func (a *storeAdapter) CloseSession(id int64, endUTC time.Time, durationSecs int) {
+	if err := a.db.CloseSession(bgCtx(), id, endUTC, durationSecs, a.min); err != nil {
 		log.Printf("storage: close session %d: %v", id, err)
 	}
 }

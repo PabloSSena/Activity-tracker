@@ -4,6 +4,7 @@ package vscode
 
 import (
 	"encoding/json"
+	"log"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -11,6 +12,11 @@ import (
 	"sort"
 	"strings"
 )
+
+// DebugDiscover, when true, makes Discover log every workspaceStorage root it
+// scans plus the count of workspace.json files it found in each. Useful to
+// diagnose Linux installs (snap/flatpak/.deb) where layouts vary.
+var DebugDiscover = false
 
 type workspaceFile struct {
 	Folder string `json:"folder"`
@@ -79,8 +85,12 @@ func Discover() map[string]string {
 	for _, base := range workspaceStorageDirs() {
 		entries, err := os.ReadDir(base)
 		if err != nil {
+			if DebugDiscover {
+				log.Printf("vscode.discover: skip %s: %v", base, err)
+			}
 			continue
 		}
+		var found, missingPath int
 		for _, e := range entries {
 			if !e.IsDir() {
 				continue
@@ -99,6 +109,10 @@ func Discover() map[string]string {
 				continue
 			}
 			if _, err := os.Stat(path); err != nil {
+				missingPath++
+				if DebugDiscover {
+					log.Printf("vscode.discover: workspace.json points to missing path %s (uri=%s)", path, wf.Folder)
+				}
 				continue
 			}
 			info, err := os.Stat(jsonPath)
@@ -110,6 +124,10 @@ func Discover() map[string]string {
 			if existing, ok := byName[name]; !ok || c.mtime > existing.mtime {
 				byName[name] = c
 			}
+			found++
+		}
+		if DebugDiscover {
+			log.Printf("vscode.discover: scanned %s found=%d missing=%d", base, found, missingPath)
 		}
 	}
 

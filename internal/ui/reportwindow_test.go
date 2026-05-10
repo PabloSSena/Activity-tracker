@@ -67,8 +67,8 @@ func TestReportPage_DarkBackground(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 	body := w.Body.String()
-	if !strings.Contains(body, "#0f1117") {
-		t.Error("expected dark background color #0f1117 in rendered page")
+	if !strings.Contains(body, "#0b0d12") {
+		t.Error("expected dark background color #0b0d12 in rendered page")
 	}
 }
 
@@ -137,6 +137,32 @@ func TestSessionNote_PostPersistsAndRendersInMarkdown(t *testing.T) {
 	}
 	if !strings.Contains(body, "📝") {
 		t.Error("expected note marker emoji in timeline table")
+	}
+}
+
+func TestSessionNote_HighlightsCardAndStripSegment(t *testing.T) {
+	end := time.Date(2026, 5, 3, 10, 0, 0, 0, time.Local)
+	dur := 3600
+	sessions := []storage.Session{{
+		ID:           99,
+		ContextType:  "vscode",
+		ContextLabel: "myproject",
+		StartUTC:     time.Date(2026, 5, 3, 9, 0, 0, 0, time.Local),
+		EndUTC:       &end,
+		DurationSecs: &dur,
+		Note:         "Refactored timeline UI",
+	}}
+	srv := newTestServer(sessions)
+	req := httptest.NewRequest(http.MethodGet, "/report?date=2026-05-03", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	body := w.Body.String()
+
+	if !strings.Contains(body, `class="tl-card has-note"`) {
+		t.Error("expected `has-note` class on the card whose session has a Note")
+	}
+	if !strings.Contains(body, `class="strip-seg has-note"`) {
+		t.Error("expected `has-note` class on the strip segment of an annotated session")
 	}
 }
 

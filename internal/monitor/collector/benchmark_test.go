@@ -12,7 +12,7 @@ import (
 type benchStore struct{ count int }
 
 func (b *benchStore) OpenSession(_, _ string) int64 { b.count++; return int64(b.count) }
-func (b *benchStore) CloseSession(_ int64, _ int) {}
+func (b *benchStore) CloseSession(_ int64, _ time.Time, _ int) {}
 
 func BenchmarkCollector_EventThroughput(b *testing.B) {
 	const eventCount = 1000

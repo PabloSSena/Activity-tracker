@@ -36,8 +36,21 @@ var browserProcesses = map[string]bool{
 	"msedge":        true,
 }
 
-const vscSuffixEm = " — Visual Studio Code"  // em dash —
-const vscSuffixHyp = " - Visual Studio Code" // regular hyphen
+// vscodeSuffixes lists every editor brand we treat as "VS Code-family".
+// Each pair covers em dash and hyphen variants; the order matters because
+// "Visual Studio Code - Insiders" must be tried before "Visual Studio Code".
+var vscodeSuffixes = []string{
+	" — Visual Studio Code - Insiders",
+	" - Visual Studio Code - Insiders",
+	" — Visual Studio Code",
+	" - Visual Studio Code",
+	" — VSCodium",
+	" - VSCodium",
+	" — Codium",
+	" - Codium",
+	" — Cursor",
+	" - Cursor",
+}
 
 // Classify maps a process name and window title to a context type and label.
 // Priority: vscode > meeting (Teams) > meeting (Zoom) > browser > other.
@@ -66,11 +79,13 @@ func Classify(processName, windowTitle string) (contextType, contextLabel string
 func extractVSCodeWorkspace(title string) string {
 	t := title
 
-	// Strip VS Code suffix — try em dash first, then hyphen
-	if idx := strings.LastIndex(t, vscSuffixEm); idx >= 0 {
-		t = t[:idx]
-	} else if idx := strings.LastIndex(t, vscSuffixHyp); idx >= 0 {
-		t = t[:idx]
+	// Strip the editor-brand suffix. Try the longer/more specific suffixes
+	// first so "Visual Studio Code - Insiders" wins over "Visual Studio Code".
+	for _, suffix := range vscodeSuffixes {
+		if idx := strings.LastIndex(t, suffix); idx >= 0 {
+			t = t[:idx]
+			break
+		}
 	}
 
 	// Take last segment — try em dash separator first, then hyphen

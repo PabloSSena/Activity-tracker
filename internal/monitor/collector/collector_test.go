@@ -35,16 +35,20 @@ func (m *mockIdle) IdleDuration() time.Duration { return m.d }
 
 // mockStorage records OpenSession/CloseSession calls.
 type mockStorage struct {
-	opened  []string // context labels of opened sessions
-	closed  []int64
-	deleted []int64
+	opened    []string // context labels of opened sessions
+	closed    []int64
+	deleted   []int64
+	durations []int       // duration_secs passed to CloseSession, in call order
+	endTimes  []time.Time // endUTC passed to CloseSession, in call order
 }
 
 func (m *mockStorage) OpenSession(contextType, label string) int64 {
 	m.opened = append(m.opened, label)
 	return int64(len(m.opened))
 }
-func (m *mockStorage) CloseSession(id int64, dur int) {
+func (m *mockStorage) CloseSession(id int64, endUTC time.Time, dur int) {
+	m.durations = append(m.durations, dur)
+	m.endTimes = append(m.endTimes, endUTC)
 	if dur >= 120 {
 		m.closed = append(m.closed, id)
 	} else {

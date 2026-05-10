@@ -99,38 +99,44 @@ func TestBuildDayStrip_Empty(t *testing.T) {
 }
 
 func TestBuildDayStrip_PositionsAreProportional(t *testing.T) {
-	// Sessions span 09:00–11:00; strip rounded bounds should be 09:00–11:00.
+	// Strip now uses a fixed 24h axis (midnight→midnight).
+	// Sessions at 09:00–10:00 and 10:00–11:00 in a 24h range:
+	//   seg0 left = 9/24*100 = 37.5%, width = 1/24*100 ≈ 4.17%
+	//   seg1 left = 10/24*100 ≈ 41.67%
 	sessions := []storage.Session{
-		mkSession(1, "vscode", "a", 0, 3600),  // 09:00–10:00 → left=0%, width=50%
-		mkSession(2, "browser", "b", 60, 3600), // 10:00–11:00 → left=50%, width=50%
+		mkSession(1, "vscode", "a", 0, 3600),   // 09:00–10:00
+		mkSession(2, "browser", "b", 60, 3600), // 10:00–11:00
 	}
 	strip := ui.BuildDayStrip(sessions)
 	if !strip.HasContent() || len(strip.Segments) != 2 {
 		t.Fatalf("expected 2 segments, got %d", len(strip.Segments))
 	}
-	if strip.Segments[0].LeftPct < -0.001 || strip.Segments[0].LeftPct > 0.001 {
-		t.Errorf("seg 0 left = %f, want ~0", strip.Segments[0].LeftPct)
+	// seg0 starts at 09:00 = 37.5% of 24h
+	if strip.Segments[0].LeftPct < 37 || strip.Segments[0].LeftPct > 38 {
+		t.Errorf("seg 0 left = %f, want ~37.5", strip.Segments[0].LeftPct)
 	}
-	if strip.Segments[0].WidthPct < 49 || strip.Segments[0].WidthPct > 51 {
-		t.Errorf("seg 0 width = %f, want ~50", strip.Segments[0].WidthPct)
+	// seg1 starts at 10:00 = 41.67% of 24h
+	if strip.Segments[1].LeftPct < 41 || strip.Segments[1].LeftPct > 43 {
+		t.Errorf("seg 1 left = %f, want ~41.67", strip.Segments[1].LeftPct)
 	}
-	if strip.Segments[1].LeftPct < 49 || strip.Segments[1].LeftPct > 51 {
-		t.Errorf("seg 1 left = %f, want ~50", strip.Segments[1].LeftPct)
+	// Fixed ticks: 0h, 6h, 12h, 18h, 24h
+	if len(strip.Ticks) != 5 {
+		t.Errorf("got %d ticks, want 5", len(strip.Ticks))
 	}
-	// Hour ticks for 2-hour span: should be 3 ticks (09h, 10h, 11h).
-	if len(strip.Ticks) != 3 {
-		t.Errorf("got %d ticks, want 3", len(strip.Ticks))
+	// Noon is always at 50%
+	if !strip.HasNoon || strip.NoonPct < 49.9 || strip.NoonPct > 50.1 {
+		t.Errorf("noon pct = %v / %f, want HasNoon=true at 50%%", strip.HasNoon, strip.NoonPct)
 	}
 }
 
 func TestBuildDayStrip_LargeSpanSkipsTicks(t *testing.T) {
-	// 14-hour span → step=2h → 8 ticks (0,2,4,6,8,10,12,14).
+	// Full 24h strip always has exactly 5 fixed ticks (0h, 6h, 12h, 18h, 24h).
 	sessions := []storage.Session{
 		mkSession(1, "vscode", "a", 0, 14*3600),
 	}
 	strip := ui.BuildDayStrip(sessions)
-	if len(strip.Ticks) > 9 {
-		t.Errorf("expected sparser ticks for large span, got %d", len(strip.Ticks))
+	if len(strip.Ticks) != 5 {
+		t.Errorf("expected 5 fixed ticks, got %d", len(strip.Ticks))
 	}
 }
 

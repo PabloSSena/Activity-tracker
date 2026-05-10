@@ -20,9 +20,12 @@ type Options struct {
 }
 
 // Store is the minimal storage interface the collector needs.
+//
+// CloseSession receives the explicit end time the collector decided on, which
+// may be earlier than wall-clock now when trimming a trailing idle period.
 type Store interface {
 	OpenSession(contextType, label string) int64
-	CloseSession(id int64, durationSecs int)
+	CloseSession(id int64, endUTC time.Time, durationSecs int)
 }
 
 // ActiveSession is a snapshot of the current in-progress activity session.
@@ -80,7 +83,7 @@ func (c *Collector) Run(ctx context.Context) {
 
 	var lastPoll time.Time
 
-	closeActive := func(now time.Time) {
+	closeActive := func(endAt time.Time) {
 		c.mu.Lock()
 		id := c.activeID
 		start := c.sessionStart
@@ -91,8 +94,30 @@ func (c *Collector) Run(ctx context.Context) {
 		if id == 0 {
 			return
 		}
-		dur := int(now.Sub(start).Seconds())
-		c.store.CloseSession(id, dur)
+		dur := int(endAt.Sub(start).Seconds())
+		if dur < 0 {
+			dur = 0
+		}
+		c.store.CloseSession(id, endAt, dur)
+	}
+
+	// idleAdjustedEnd returns when the session should logically end given the
+	// reference wall time `now`: if the user has been idle past the threshold,
+	// we credit them only up to when they actually went idle. Clamped so it
+	// never precedes the session's own start.
+	idleAdjustedEnd := func(now time.Time) time.Time {
+		nowIdle := c.idle.IdleDuration()
+		if nowIdle < idleTimeout {
+			return now
+		}
+		c.mu.RLock()
+		start := c.sessionStart
+		c.mu.RUnlock()
+		end := now.Add(-nowIdle)
+		if end.Before(start) {
+			end = start
+		}
+		return end
 	}
 
 	checkpoint := time.NewTicker(checkpointInterval)
@@ -101,7 +126,7 @@ func (c *Collector) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			closeActive(time.Now().UTC())
+			closeActive(idleAdjustedEnd(time.Now().UTC()))
 			return
 
 		case <-checkpoint.C:
@@ -110,12 +135,12 @@ func (c *Collector) Run(ctx context.Context) {
 			c.mu.RUnlock()
 			if hasActive && c.idle.IdleDuration() >= idleTimeout {
 				log.Printf("collector: idle timeout, closing session")
-				closeActive(time.Now().UTC())
+				closeActive(idleAdjustedEnd(time.Now().UTC()))
 			}
 
 		case evt, ok := <-c.mon.Events():
 			if !ok {
-				closeActive(time.Now().UTC())
+				closeActive(idleAdjustedEnd(time.Now().UTC()))
 				return
 			}
 
@@ -127,15 +152,24 @@ func (c *Collector) Run(ctx context.Context) {
 			}
 			lastPoll = now
 
+			nowIdle := c.idle.IdleDuration()
+
 			c.mu.RLock()
 			curID := c.activeID
 			curLabel := c.activeLabel
 			c.mu.RUnlock()
 
-			if curID != 0 && c.idle.IdleDuration() >= idleTimeout {
+			if curID != 0 && nowIdle >= idleTimeout {
 				log.Printf("collector: idle timeout on event, closing session")
-				closeActive(now)
+				closeActive(idleAdjustedEnd(now))
 				curLabel = ""
+			}
+
+			// While the user remains idle past the threshold, don't open a
+			// new session — wait for actual interaction (idle drops below
+			// timeout) before resuming tracking.
+			if nowIdle >= idleTimeout {
+				continue
 			}
 
 			if evt.ContextLabel != curLabel {
