@@ -1,8 +1,11 @@
 package report
 
 import (
+	"log"
+	"path/filepath"
 	"time"
 
+	igit "github.com/user/activitytracker/internal/git"
 	"github.com/user/activitytracker/internal/storage"
 	"github.com/user/activitytracker/internal/vscode"
 )
@@ -16,8 +19,9 @@ type DailyReport struct {
 	Date         string
 	Sessions     []storage.Session
 	Groups       []Group
-	Totals       map[string]int   // context_label → total seconds
+	Totals       map[string]int     // context_label → total seconds
 	ChangedFiles map[int64][]string // session.ID → relative file paths modified during session
+	GitCommits   []igit.RepoCommits // commits per repo for this day, derived on demand
 }
 
 // Group is a context cluster in the grouped summary.
@@ -92,8 +96,48 @@ func (g *Generator) BuildReport(dateLocal string, sessions []storage.Session) Da
 	}
 
 	g.attachChangedFiles(&dr, filled)
+	g.attachGitCommits(&dr, filled)
 
 	return dr
+}
+
+// attachGitCommits scans VS Code workspace paths used in this day's sessions
+// for git repositories and populates dr.GitCommits with commits on dr.Date.
+func (g *Generator) attachGitCommits(dr *DailyReport, sessions []storage.Session) {
+	if g.resolver == nil {
+		return
+	}
+
+	rootsSeen := map[string]bool{}
+
+	for _, s := range sessions {
+		if s.ContextType != "vscode" {
+			continue
+		}
+		path := g.resolver(s.ContextLabel)
+		if path == "" {
+			continue
+		}
+		root := igit.GitRoot(path)
+		if root == "" || rootsSeen[root] {
+			continue
+		}
+		rootsSeen[root] = true
+
+		commits, err := igit.DayCommits(root, dr.Date)
+		if err != nil {
+			log.Printf("report: git commits for %s: %v", root, err)
+			continue
+		}
+		if len(commits) == 0 {
+			continue
+		}
+		dr.GitCommits = append(dr.GitCommits, igit.RepoCommits{
+			RepoName: filepath.Base(root),
+			RepoPath: root,
+			Commits:  commits,
+		})
+	}
 }
 
 // attachChangedFiles walks each VS Code workspace once and buckets modified

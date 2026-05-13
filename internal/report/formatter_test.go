@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	igit "github.com/user/activitytracker/internal/git"
 	"github.com/user/activitytracker/internal/report"
 	"github.com/user/activitytracker/internal/storage"
 )
@@ -131,4 +132,54 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// ── git commits in formatter ──────────────────────────────────────────────────
+
+func TestFormatter_GitCommitsSection(t *testing.T) {
+	ts := time.Date(2026, 5, 12, 14, 23, 0, 0, time.Local)
+	dr := report.DailyReport{
+		Date: "2026-05-12",
+		GitCommits: []igit.RepoCommits{
+			{
+				RepoName: "myproject",
+				RepoPath: "/home/user/myproject",
+				Commits: []igit.Commit{
+					{Hash: "abc1234", Subject: "feat: add widget", Author: "Alice", Timestamp: ts},
+					{Hash: "def5678", Subject: "fix: typo", Author: "Alice", Timestamp: ts.Add(-time.Hour)},
+				},
+			},
+		},
+	}
+	out := report.NewFormatter().Format(dr)
+
+	if !strings.Contains(out, "## Git commits") {
+		t.Error("expected '## Git commits' section header")
+	}
+	if !strings.Contains(out, "myproject") {
+		t.Error("expected repo name in output")
+	}
+	if !strings.Contains(out, "abc1234") {
+		t.Error("expected commit hash in output")
+	}
+	if !strings.Contains(out, "feat: add widget") {
+		t.Error("expected commit subject in output")
+	}
+}
+
+func TestFormatter_NoGitSectionWhenEmpty(t *testing.T) {
+	end := time.Date(2026, 5, 12, 10, 0, 0, 0, time.UTC)
+	dur := 3600
+	dr := report.DailyReport{
+		Date: "2026-05-12",
+		Sessions: []storage.Session{{
+			ContextType: "vscode", ContextLabel: "p",
+			StartUTC: time.Date(2026, 5, 12, 9, 0, 0, 0, time.UTC),
+			EndUTC:   &end, DurationSecs: &dur,
+		}},
+	}
+	out := report.NewFormatter().Format(dr)
+	if strings.Contains(out, "## Git commits") {
+		t.Error("'## Git commits' section should be absent when GitCommits is empty")
+	}
 }

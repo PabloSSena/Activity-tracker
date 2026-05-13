@@ -272,6 +272,9 @@ var tmplFuncs = template.FuncMap{
 	"dayStrip":         BuildDayStrip,
 	"focusStats":       BuildFocusStats,
 	"sessionFocus":     classifySession,
+	"fmtCommitTime": func(t time.Time) string {
+		return t.In(time.Local).Format("15:04")
+	},
 }
 
 var pageTmpl = template.Must(template.New("page").Funcs(tmplFuncs).Parse(`<!DOCTYPE html>
@@ -438,6 +441,18 @@ details[open].focus-legend summary::before{content:"▾ How are sessions classif
 .focus-legend-row{display:flex;align-items:baseline;gap:8px;line-height:1.55;color:var(--text-2)}
 .focus-legend-row strong{color:var(--text);font-weight:600;white-space:nowrap}
 
+/* Git commits */
+.git-commits{background:var(--surface);border:1px solid var(--hairline);border-radius:8px;padding:16px 18px}
+.git-repo{margin-bottom:16px}
+.git-repo:last-child{margin-bottom:0}
+.git-repo-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.git-repo-name::before{content:"⬡";color:var(--text-3);font-size:12px}
+.git-commit-row{display:flex;align-items:baseline;gap:10px;padding:5px 0;border-bottom:1px solid var(--hairline);font-size:13px}
+.git-commit-row:last-child{border-bottom:none}
+.git-hash{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--accent);background:var(--accent-soft);padding:1px 6px;border-radius:4px;flex-shrink:0;letter-spacing:.02em}
+.git-subject{flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.git-meta{color:var(--text-3);font-size:11px;white-space:nowrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+
 /* Live + empty + flash */
 #empty{color:var(--text-2);font-size:14px;padding:80px 0;text-align:center;line-height:1.6}
 #live-session{margin-bottom:24px}
@@ -565,6 +580,23 @@ details[open].focus-legend summary::before{content:"▾ How are sessions classif
         {{end}}
         </div>
         </div>{{end}}
+        {{if .Report.GitCommits}}
+        <div class="section-label">Git Commits</div>
+        <div class="git-commits">
+          {{range .Report.GitCommits}}
+          <div class="git-repo">
+            <div class="git-repo-name">{{.RepoName}}</div>
+            {{range .Commits}}
+            <div class="git-commit-row">
+              <span class="git-hash">{{.Hash}}</span>
+              <span class="git-subject" title="{{.Subject}}">{{.Subject}}</span>
+              <span class="git-meta">{{fmtCommitTime .Timestamp}} · {{.Author}}</span>
+            </div>
+            {{end}}
+          </div>
+          {{end}}
+        </div>
+        {{end}}
         {{with focusStats .Report.Sessions}}{{if .TotalSecs}}
         <div class="section-label">Day Focus</div>
         <div class="focus-card">

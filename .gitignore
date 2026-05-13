@@ -52,3 +52,4 @@ desktop.ini
 *.db-wal
 /data.db
 /exports/
+/specs
