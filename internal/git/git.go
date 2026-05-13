@@ -1,6 +1,7 @@
 package git
 
 import (
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -29,6 +30,29 @@ func GitRoot(path string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// SubRepoRoots scans immediate subdirectories of dir for git repositories and
+// returns their unique root paths. Used for multi-root VS Code workspaces where
+// the workspace label resolves to a parent directory, not a git root itself.
+func SubRepoRoots(dir string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var roots []string
+	for _, e := range entries {
+		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		root := GitRoot(dir + "/" + e.Name())
+		if root != "" && !seen[root] {
+			seen[root] = true
+			roots = append(roots, root)
+		}
+	}
+	return roots
 }
 
 // DayCommits returns all non-merge commits made in repoPath on the given local date (YYYY-MM-DD).

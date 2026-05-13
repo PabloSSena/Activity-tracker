@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/user/activitytracker/internal/autostart"
@@ -98,6 +99,8 @@ func main() {
 	}
 	missLogged := map[string]bool{}
 	resolver := func(name string) string {
+		// Normalize labels stored before the classifier was fixed (e.g. "idp (Workspace)").
+		name = strings.TrimSuffix(name, " (Workspace)")
 		path := workspaces[name]
 		if path == "" && !missLogged[name] {
 			missLogged[name] = true

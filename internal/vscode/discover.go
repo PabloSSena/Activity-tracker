@@ -19,7 +19,8 @@ import (
 var DebugDiscover = false
 
 type workspaceFile struct {
-	Folder string `json:"folder"`
+	Folder    string `json:"folder"`
+	Workspace string `json:"workspace"` // multi-root workspace file URI
 }
 
 // workspaceStorageDirs returns candidate VS Code workspaceStorage directories
@@ -105,6 +106,28 @@ func Discover() map[string]string {
 				continue
 			}
 			path := decodeFileURI(wf.Folder)
+			if path == "" && wf.Workspace != "" {
+				wsPath := decodeFileURI(wf.Workspace)
+				if wsPath == "" {
+					continue
+				}
+				path = filepath.Dir(wsPath)
+				name := strings.TrimSuffix(filepath.Base(wsPath), filepath.Ext(wsPath))
+				if _, err := os.Stat(path); err != nil {
+					missingPath++
+					continue
+				}
+				info, err := os.Stat(jsonPath)
+				if err != nil {
+					continue
+				}
+				c := candidate{path: path, mtime: info.ModTime().UnixNano()}
+				if existing, ok := byName[name]; !ok || c.mtime > existing.mtime {
+					byName[name] = c
+				}
+				found++
+				continue
+			}
 			if path == "" {
 				continue
 			}

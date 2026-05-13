@@ -118,25 +118,32 @@ func (g *Generator) attachGitCommits(dr *DailyReport, sessions []storage.Session
 		if path == "" {
 			continue
 		}
-		root := igit.GitRoot(path)
-		if root == "" || rootsSeen[root] {
-			continue
+		var candidateRoots []string
+		if root := igit.GitRoot(path); root != "" {
+			candidateRoots = []string{root}
+		} else {
+			candidateRoots = igit.SubRepoRoots(path)
 		}
-		rootsSeen[root] = true
 
-		commits, err := igit.DayCommits(root, dr.Date)
-		if err != nil {
-			log.Printf("report: git commits for %s: %v", root, err)
-			continue
+		for _, root := range candidateRoots {
+			if rootsSeen[root] {
+				continue
+			}
+			rootsSeen[root] = true
+			commits, err := igit.DayCommits(root, dr.Date)
+			if err != nil {
+				log.Printf("report: git commits for %s: %v", root, err)
+				continue
+			}
+			if len(commits) == 0 {
+				continue
+			}
+			dr.GitCommits = append(dr.GitCommits, igit.RepoCommits{
+				RepoName: filepath.Base(root),
+				RepoPath: root,
+				Commits:  commits,
+			})
 		}
-		if len(commits) == 0 {
-			continue
-		}
-		dr.GitCommits = append(dr.GitCommits, igit.RepoCommits{
-			RepoName: filepath.Base(root),
-			RepoPath: root,
-			Commits:  commits,
-		})
 	}
 }
 

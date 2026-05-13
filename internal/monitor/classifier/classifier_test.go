@@ -23,6 +23,8 @@ func TestClassify_VSCode(t *testing.T) {
 		{"code", "README.md - backend - Visual Studio Code", "vscode", "backend"},
 		{"Code.exe", "myproject - Visual Studio Code", "vscode", "myproject"},
 		{"Code.exe", "Add frequent auto-save f... - trackingSystem - Visual Studio Code", "vscode", "trackingSystem"},
+		{"code", "main.go — idp (Workspace) — Visual Studio Code", "vscode", "idp"},
+		{"code", "main.go - idp (Workspace) - Visual Studio Code", "vscode", "idp"},
 	}
 	for _, tt := range tests {
 		ct, cl := classifier.Classify(tt.process, tt.title)

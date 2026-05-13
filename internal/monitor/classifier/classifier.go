@@ -98,6 +98,7 @@ func extractVSCodeWorkspace(title string) string {
 	if t == "" {
 		return title
 	}
+	t = strings.TrimSuffix(t, " (Workspace)")
 	return t
 }
 
